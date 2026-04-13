@@ -39,6 +39,7 @@ let gameScene;
 let shootSound;
 let music;
 let touchPointer;
+let gameStarted = false;
 const PLAYER_SPEED = 300;
 
 function preload() {
@@ -76,79 +77,96 @@ function preload() {
 
 function create() {
     gameScene = this;
+    gameStarted = false;
     
-    player = this.physics.add.sprite(400, 500, 'player');
+    let startText = this.add.text(400, 300, 'CLIQUE PARA INICIAR', {
+        fontSize: '40px',
+        fill: '#fff',
+        backgroundColor: '#000000',
+        padding: { x: 20, y: 10 }
+    }).setOrigin(0.5);
+    
+    this.input.once('pointerdown', () => {
+        startText.destroy();
+        gameStarted = true;
+        
+        music = this.sound.add('music');
+        music.setVolume(0.4);
+        music.setLoop(true);
+        music.play();
+        
+        initGame(this);
+    });
+}
+
+function initGame(scene) {
+    player = scene.physics.add.sprite(400, 500, 'player');
     player.setCollideWorldBounds(true);
     
-    bullets = this.physics.add.group({
+    bullets = scene.physics.add.group({
         defaultKey: 'bullet',
         maxSize: 50
     });
     
-    enemies = this.physics.add.group();
+    enemies = scene.physics.add.group();
     
-    cursors = this.input.keyboard.addKeys({
+    cursors = scene.input.keyboard.addKeys({
         up: Phaser.Input.Keyboard.KeyCodes.W,
         down: Phaser.Input.Keyboard.KeyCodes.S,
         left: Phaser.Input.Keyboard.KeyCodes.A,
         right: Phaser.Input.Keyboard.KeyCodes.D
     });
-    fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    pauseKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    fireKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    pauseKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     
-    this.time.addEvent({
+    scene.time.addEvent({
         delay: 1000,
         callback: spawnEnemy,
-        callbackScope: this,
+        callbackScope: scene,
         loop: true
     });
     
-    scoreText = this.add.text(16, 16, 'Score: 0', { 
+    scoreText = scene.add.text(16, 16, 'Score: 0', { 
         fontSize: '32px', 
         fill: '#fff' 
     });
     
-    pauseButton = this.add.text(700, 16, 'PAUSE', {
+    pauseButton = scene.add.text(700, 16, 'PAUSE', {
         fontSize: '24px',
         fill: '#fff',
         backgroundColor: '#444444',
         padding: { x: 10, y: 5 }
     }).setInteractive({ useHandCursor: true });
     
-    pauseButton.on('pointerdown', () => togglePause(this));
+    pauseButton.on('pointerdown', () => togglePause(scene));
     
-    pauseText = this.add.text(400, 300, '', {
+    pauseText = scene.add.text(400, 300, '', {
         fontSize: '28px',
         fill: '#fff',
         align: 'center'
     }).setOrigin(0.5).setVisible(false);
     
-    shootSound = this.sound.add('shoot');
+    shootSound = scene.sound.add('shoot');
     shootSound.setVolume(0.5);
     
-    music = this.sound.add('music');
-    music.setVolume(0.4);
-    music.setLoop(true);
-    music.play();
-    
-    this.input.on('pointerdown', (pointer) => {
+    scene.input.on('pointerdown', (pointer) => {
         if (pointer.x < 650) {
             touchPointer = pointer;
         }
     });
     
-    this.input.on('pointermove', (pointer) => {
+    scene.input.on('pointermove', (pointer) => {
         if (pointer.x < 650 && pointer.isDown) {
             touchPointer = pointer;
         }
     });
     
-    this.input.on('pointerup', () => {
+    scene.input.on('pointerup', () => {
         touchPointer = null;
     });
     
-    this.physics.add.overlap(bullets, enemies, hitEnemy, null, this);
-    this.physics.add.overlap(player, enemies, hitPlayer, null, this);
+    scene.physics.add.overlap(bullets, enemies, hitEnemy, null, scene);
+    scene.physics.add.overlap(player, enemies, hitPlayer, null, scene);
 }
 
 function update(time, delta) {
@@ -156,10 +174,10 @@ function update(time, delta) {
         togglePause(gameScene);
     }
     
-    if (isPaused) return;
+    if (isPaused || !gameStarted) return;
     
     if (touchPointer) {
-        this.physics.moveToObject(player, touchPointer, PLAYER_SPEED);
+        gameScene.physics.moveToObject(player, touchPointer, PLAYER_SPEED);
     } else if (cursors.left.isDown) {
         player.setVelocityX(-300);
     } else if (cursors.right.isDown) {
