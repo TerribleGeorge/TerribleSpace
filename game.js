@@ -37,7 +37,6 @@ let pauseButton;
 let pauseText;
 let gameScene;
 let shootSound;
-let explosionSound;
 let music;
 let shootBtn;
 let touchPointer;
@@ -78,7 +77,6 @@ function preload() {
     graphics.generateTexture('buttonBg', 80, 40);
     
     this.load.audio('shoot', 'assets/laser1.ogg');
-    this.load.audio('explosion', 'assets/explosao.ogg');
     this.load.audio('music', 'assets/Kawai Kitsune.mp3');
 }
 
@@ -133,9 +131,6 @@ function create() {
     
     shootSound = this.sound.add('shoot');
     shootSound.setVolume(0.5);
-    
-    explosionSound = this.sound.add('explosion');
-    explosionSound.setVolume(0.5);
     
     music = this.sound.add('music');
     music.setVolume(0.4);
@@ -238,7 +233,6 @@ function spawnEnemy() {
 }
 
 function hitEnemy(bullet, enemy) {
-    explosionSound.play();
     bullet.setActive(false).setVisible(false);
     enemy.destroy();
     score += 10;
