@@ -3,6 +3,10 @@ const config = {
     width: 800,
     height: 600,
     backgroundColor: '#000000',
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
     physics: {
         default: 'arcade',
         arcade: {
@@ -34,6 +38,9 @@ let pauseText;
 let gameScene;
 let shootSound;
 let music;
+let leftBtn;
+let rightBtn;
+let shootBtn;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -132,6 +139,53 @@ function create() {
     music.setVolume(0.4);
     music.setLoop(true);
     music.play();
+    
+    const isMobile = 'ontouchstart' in window || (this.sys.game.device.os.android || this.sys.game.device.os.iOS);
+    
+    if (isMobile) {
+        this.add.text(400, 300, 'Gire o celular\npara modo paisagem', {
+            fontSize: '24px',
+            fill: '#ffff00',
+            align: 'center',
+            backgroundColor: '#000000',
+            padding: { x: 20, y: 10 }
+        }).setOrigin(0.5).setScrollFactor(0);
+        
+        leftBtn = this.add.text(50, 500, '◀', {
+            fontSize: '40px',
+            fill: '#fff',
+            backgroundColor: '#333333',
+            padding: { x: 15, y: 10 }
+        }).setInteractive({ useHandCursor: true });
+        
+        rightBtn = this.add.text(150, 500, '▶', {
+            fontSize: '40px',
+            fill: '#fff',
+            backgroundColor: '#333333',
+            padding: { x: 15, y: 10 }
+        }).setInteractive({ useHandCursor: true });
+        
+        shootBtn = this.add.text(650, 500, '🔫', {
+            fontSize: '40px',
+            fill: '#fff',
+            backgroundColor: '#333333',
+            padding: { x: 15, y: 10 }
+        }).setInteractive({ useHandCursor: true });
+        
+        leftBtn.setScrollFactor(0);
+        rightBtn.setScrollFactor(0);
+        shootBtn.setScrollFactor(0);
+        
+        leftBtn.on('pointerdown', () => player.setVelocityX(-300));
+        leftBtn.on('pointerup', () => player.setVelocityX(0));
+        leftBtn.on('pointerout', () => player.setVelocityX(0));
+        
+        rightBtn.on('pointerdown', () => player.setVelocityX(300));
+        rightBtn.on('pointerup', () => player.setVelocityX(0));
+        rightBtn.on('pointerout', () => player.setVelocityX(0));
+        
+        shootBtn.on('pointerdown', () => fireShoot(this));
+    }
     
     this.physics.add.overlap(bullets, enemies, hitEnemy, null, this);
     this.physics.add.overlap(player, enemies, hitPlayer, null, this);
