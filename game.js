@@ -170,11 +170,13 @@ function initGame(scene) {
 }
 
 function update(time, delta) {
-    if (pauseKey.isDown && !isPaused) {
+    if (!gameScene || !gameStarted || !cursors || !player) return;
+    
+    if (pauseKey && pauseKey.isDown && !isPaused) {
         togglePause(gameScene);
     }
     
-    if (isPaused || !gameStarted) return;
+    if (isPaused) return;
     
     if (touchPointer) {
         gameScene.physics.moveToObject(player, touchPointer, PLAYER_SPEED);
@@ -186,7 +188,7 @@ function update(time, delta) {
         player.setVelocityX(0);
     }
     
-    if (fireKey.isDown && time > lastFired) {
+    if (fireKey && fireKey.isDown && time > lastFired) {
         fireBullet();
         lastFired = time + 200;
     }
