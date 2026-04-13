@@ -1,0 +1,20 @@
+{
+  "name": "space-shooter",
+  "version": "1.0.0",
+  "description": "Simple space shooter game with Phaser",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx http-server -p 3000",
+    "dev": "npx http-server -p 3000"
+  },
+  "keywords": [
+    "game",
+    "phaser",
+    "space-shooter"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "phaser": "^4.0.0"
+  }
+}
