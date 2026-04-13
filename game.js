@@ -78,7 +78,7 @@ function preload() {
     graphics.generateTexture('buttonBg', 80, 40);
     
     this.load.audio('shoot', 'assets/laser1.ogg');
-    this.load.audio('explosion', 'assets/explosão.ogg');
+    this.load.audio('explosion', 'assets/explosao.ogg');
     this.load.audio('music', 'assets/Kawai Kitsune.mp3');
 }
 
@@ -174,7 +174,7 @@ function create() {
         });
     }
 
-function update(time) {
+function update(time, delta) {
     if (pauseKey.isDown && !isPaused) {
         togglePause(gameScene);
     }
@@ -202,13 +202,13 @@ function update(time) {
     }
     
     bullets.getChildren().forEach(function(b) {
-        if (b && b.active && b.y < -10) {
+        if (b && b.y < -20) {
             b.destroy();
         }
     });
     
     enemies.getChildren().forEach(function(e) {
-        if (e && e.y > 610) {
+        if (e && e.y > 620) {
             e.destroy();
         }
     });
@@ -239,7 +239,7 @@ function spawnEnemy() {
 
 function hitEnemy(bullet, enemy) {
     explosionSound.play();
-    bullet.destroy();
+    bullet.setActive(false).setVisible(false);
     enemy.destroy();
     score += 10;
     scoreText.setText('Score: ' + score);
@@ -302,7 +302,7 @@ function showGameOver(scene) {
     });
 }
 
-function hitPlayer(player, enemy) {
+function hitPlayer(playerSprite, enemy) {
     enemy.destroy();
     showGameOver(gameScene);
 }
