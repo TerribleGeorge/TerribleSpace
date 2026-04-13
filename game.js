@@ -126,7 +126,7 @@ function create() {
     shootSound.setVolume(0.5);
     
     // explosionSound = this.sound.add('explosion');
-    explosionSound.setVolume(0.5);
+    // explosionSound.setVolume(0.5);
     
     music = this.sound.add('music');
     music.setVolume(0.4);
