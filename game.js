@@ -32,6 +32,8 @@ let isPaused = false;
 let pauseButton;
 let pauseText;
 let gameScene;
+let shootSound;
+let explosionSound;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -66,6 +68,9 @@ function preload() {
     graphics.fillStyle(0x444444);
     graphics.fillRoundedRect(0, 0, 80, 40, 8);
     graphics.generateTexture('buttonBg', 80, 40);
+    
+    this.load.audio('shoot', 'assets/laser1.ogg');
+    this.load.audio('explosion', 'assets/explosao.ogg');
 }
 
 function create() {
@@ -117,6 +122,12 @@ function create() {
         align: 'center'
     }).setOrigin(0.5).setVisible(false);
     
+    shootSound = this.sound.add('shoot');
+    shootSound.setVolume(0.5);
+    
+    explosionSound = this.sound.add('explosion');
+    explosionSound.setVolume(0.5);
+    
     this.physics.add.overlap(bullets, enemies, hitEnemy, null, this);
     this.physics.add.overlap(player, enemies, hitPlayer, null, this);
 }
@@ -142,6 +153,7 @@ function update(time) {
             bullet.setActive(true).setVisible(true);
             bullet.setVelocityY(-400);
             lastFired = time + 200;
+            shootSound.play();
         }
     }
     
@@ -163,10 +175,12 @@ function togglePause(scene) {
     
     if (isPaused) {
         scene.physics.pause();
+        scene.sound.pauseAll();
         pauseText.setText('PAUSADO\n\nPressione ESC\nou clique em PAUSE').setVisible(true);
         pauseButton.setText('RESUME');
     } else {
         scene.physics.resume();
+        scene.sound.resumeAll();
         pauseText.setVisible(false);
         pauseButton.setText('PAUSE');
     }
@@ -182,6 +196,7 @@ function spawnEnemy() {
 function hitEnemy(bullet, enemy) {
     bullet.setActive(false).setVisible(false);
     enemy.destroy();
+    explosionSound.play();
     score += 10;
     scoreText.setText('Score: ' + score);
 }
