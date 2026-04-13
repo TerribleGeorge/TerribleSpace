@@ -37,8 +37,11 @@ let pauseButton;
 let pauseText;
 let gameScene;
 let shootSound;
+let explosionSound;
 let music;
 let shootBtn;
+let touchPointer;
+const PLAYER_SPEED = 350;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -75,6 +78,7 @@ function preload() {
     graphics.generateTexture('buttonBg', 80, 40);
     
     this.load.audio('shoot', 'assets/laser1.ogg');
+    this.load.audio('explosion', 'assets/explosão.ogg');
     this.load.audio('music', 'assets/Kawai Kitsune.mp3');
 }
 
@@ -130,8 +134,8 @@ function create() {
     shootSound = this.sound.add('shoot');
     shootSound.setVolume(0.5);
     
-    // explosionSound = this.sound.add('explosion');
-    // explosionSound.setVolume(0.5);
+    explosionSound = this.sound.add('explosion');
+    explosionSound.setVolume(0.5);
     
     music = this.sound.add('music');
     music.setVolume(0.4);
@@ -141,19 +145,21 @@ function create() {
     const isMobile = 'ontouchstart' in window || (this.sys.game.device.os.android || this.sys.game.device.os.iOS);
     
     if (isMobile) {
-        this.add.text(400, 300, 'Gire o celular\npara modo paisagem', {
-            fontSize: '24px',
-            fill: '#ffff00',
-            align: 'center',
-            backgroundColor: '#000000',
-            padding: { x: 20, y: 10 }
-        }).setOrigin(0.5).setScrollFactor(0);
+        this.input.on('pointerdown', function(pointer) {
+            if (pointer.x < 600) {
+                touchPointer = pointer;
+            }
+        });
         
-        player.setInteractive({ draggable: true });
+        this.input.on('pointermove', function(pointer) {
+            if (pointer.x < 600 && pointer.isDown) {
+                touchPointer = pointer;
+            }
+        });
         
-        player.on('drag', function(pointer, dragX, dragY) {
-            player.x = dragX;
-            player.y = dragY;
+        this.input.on('pointerup', function(pointer) {
+            touchPointer = null;
+            player.setVelocity(0, 0);
         });
         
         shootBtn = this.add.text(700, 500, '🔥', {
@@ -166,19 +172,7 @@ function create() {
         shootBtn.on('pointerdown', function() {
             fireShootMobile();
         });
-        
-        this.input.on('pointerdown', function(pointer) {
-            if (pointer.x < 600) {
-                player.x = pointer.x;
-                player.y = pointer.y;
-                player.setVelocity(0, 0);
-            }
-        });
     }
-    
-    this.physics.add.overlap(bullets, enemies, hitEnemy, null, this);
-    this.physics.add.overlap(player, enemies, hitPlayer, null, this);
-}
 
 function update(time) {
     if (pauseKey.isDown && !isPaused) {
@@ -187,11 +181,13 @@ function update(time) {
     
     if (isPaused) return;
     
-    if (cursors.left.isDown) {
+    if (touchPointer) {
+        this.physics.moveToObject(player, touchPointer, PLAYER_SPEED);
+    } else if (cursors.left.isDown) {
         player.setVelocityX(-300);
     } else if (cursors.right.isDown) {
         player.setVelocityX(300);
-    } else {
+    } else if (!touchPointer) {
         player.setVelocityX(0);
     }
     
@@ -207,7 +203,7 @@ function update(time) {
     
     bullets.getChildren().forEach(function(b) {
         if (b && b.active && b.y < -10) {
-            b.setActive(false).setVisible(false);
+            b.destroy();
         }
     });
     
@@ -242,9 +238,9 @@ function spawnEnemy() {
 }
 
 function hitEnemy(bullet, enemy) {
-    bullet.setActive(false).setVisible(false);
+    explosionSound.play();
+    bullet.destroy();
     enemy.destroy();
-    // explosionSound.play();
     score += 10;
     scoreText.setText('Score: ' + score);
 }
