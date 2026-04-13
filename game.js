@@ -38,9 +38,8 @@ let pauseText;
 let gameScene;
 let shootSound;
 let music;
-let shootBtn;
 let touchPointer;
-const PLAYER_SPEED = 350;
+const PLAYER_SPEED = 300;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -71,11 +70,6 @@ function preload() {
     graphics.fillRect(0, 0, 10, 20);
     graphics.generateTexture('bullet', 10, 20);
     
-    graphics.clear();
-    graphics.fillStyle(0x444444);
-    graphics.fillRoundedRect(0, 0, 80, 40, 8);
-    graphics.generateTexture('buttonBg', 80, 40);
-    
     this.load.audio('shoot', 'assets/laser1.ogg');
     this.load.audio('music', 'assets/Kawai Kitsune.mp3');
 }
@@ -83,7 +77,7 @@ function preload() {
 function create() {
     gameScene = this;
     
-    player = this.physics.add.sprite(400, 550, 'player');
+    player = this.physics.add.sprite(400, 500, 'player');
     player.setCollideWorldBounds(true);
     
     bullets = this.physics.add.group({
@@ -137,37 +131,22 @@ function create() {
     music.setLoop(true);
     music.play();
     
-    const isMobile = 'ontouchstart' in window || (this.sys.game.device.os.android || this.sys.game.device.os.iOS);
+    this.input.on('pointerdown', (pointer) => {
+        if (pointer.x < 650) {
+            touchPointer = pointer;
+        }
+    });
     
-    if (isMobile) {
-        this.input.on('pointerdown', function(pointer) {
-            if (pointer.x < 600) {
-                touchPointer = pointer;
-            }
-        });
-        
-        this.input.on('pointermove', function(pointer) {
-            if (pointer.x < 600 && pointer.isDown) {
-                touchPointer = pointer;
-            }
-        });
-        
-        this.input.on('pointerup', function(pointer) {
-            touchPointer = null;
-            player.setVelocity(0, 0);
-        });
-        
-        shootBtn = this.add.text(700, 500, '🔥', {
-            fontSize: '50px',
-            fill: '#fff',
-            backgroundColor: '#cc0000',
-            padding: { x: 20, y: 15 }
-        }).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-        
-        shootBtn.on('pointerdown', function() {
-            fireShootMobile();
-        });
-    }
+    this.input.on('pointermove', (pointer) => {
+        if (pointer.x < 650 && pointer.isDown) {
+            touchPointer = pointer;
+        }
+    });
+    
+    this.input.on('pointerup', () => {
+        touchPointer = null;
+    });
+}
 
 function update(time, delta) {
     if (pauseKey.isDown && !isPaused) {
@@ -187,41 +166,29 @@ function update(time, delta) {
     }
     
     if (fireKey.isDown && time > lastFired) {
-        const bullet = bullets.get(player.x, player.y - 20);
-        if (bullet) {
-            bullet.setActive(true).setVisible(true);
-            bullet.setVelocityY(-400);
-            lastFired = time + 200;
-            shootSound.play();
-        }
+        fireBullet();
+        lastFired = time + 200;
     }
     
-    bullets.getChildren().forEach(function(b) {
+    bullets.getChildren().forEach((b) => {
         if (b && b.y < -20) {
             b.destroy();
         }
     });
     
-    enemies.getChildren().forEach(function(e) {
+    enemies.getChildren().forEach((e) => {
         if (e && e.y > 620) {
             e.destroy();
         }
     });
 }
 
-function togglePause(scene) {
-    isPaused = !isPaused;
-    
-    if (isPaused) {
-        scene.physics.pause();
-        scene.sound.pauseAll();
-        pauseText.setText('PAUSADO\n\nPressione ESC\nou clique em PAUSE').setVisible(true);
-        pauseButton.setText('RESUME');
-    } else {
-        scene.physics.resume();
-        scene.sound.resumeAll();
-        pauseText.setVisible(false);
-        pauseButton.setText('PAUSE');
+function fireBullet() {
+    const bullet = bullets.get(player.x, player.y - 20);
+    if (bullet) {
+        bullet.setActive(true).setVisible(true);
+        bullet.setVelocityY(-400);
+        shootSound.play();
     }
 }
 
@@ -239,13 +206,19 @@ function hitEnemy(bullet, enemy) {
     scoreText.setText('Score: ' + score);
 }
 
-function fireShootMobile() {
-    if (isPaused) return;
-    const bullet = bullets.get(player.x, player.y - 20);
-    if (bullet) {
-        bullet.setActive(true).setVisible(true);
-        bullet.setVelocityY(-400);
-        shootSound.play();
+function togglePause(scene) {
+    isPaused = !isPaused;
+    
+    if (isPaused) {
+        scene.physics.pause();
+        scene.sound.pauseAll();
+        pauseText.setText('PAUSADO\n\nPressione ESC\nou clique em PAUSE').setVisible(true);
+        pauseButton.setText('RESUME');
+    } else {
+        scene.physics.resume();
+        scene.sound.resumeAll();
+        pauseText.setVisible(false);
+        pauseButton.setText('PAUSE');
     }
 }
 
