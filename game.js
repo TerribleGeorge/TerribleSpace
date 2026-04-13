@@ -29,6 +29,8 @@ let enemies;
 let lastFired = 0;
 let score = 0;
 let scoreText;
+let phaseText;
+let bossHealthText;
 let cursors;
 let fireKey;
 let pauseKey;
@@ -40,7 +42,15 @@ let shootSound;
 let music;
 let touchPointer;
 let gameStarted = false;
+let currentPhase = 1;
+let boss = null;
+let bossSpawned = false;
+let enemySpawnEvent;
 const PLAYER_SPEED = 300;
+const POINTS_PER_PHASE = 500;
+const BOSS_SCORE = 3000;
+const BOSS_MAX_HEALTH = 1000;
+const BOSS_DAMAGE = 20;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -71,6 +81,11 @@ function preload() {
     graphics.fillRect(0, 0, 10, 20);
     graphics.generateTexture('bullet', 10, 20);
     
+    graphics.clear();
+    graphics.fillStyle(0xff6600);
+    graphics.fillRect(0, 0, 80, 80);
+    graphics.generateTexture('boss', 80, 80);
+    
     this.load.audio('shoot', 'assets/laser1.ogg');
     this.load.audio('music', 'assets/Kawai Kitsune.mp3');
 }
@@ -78,6 +93,10 @@ function preload() {
 function create() {
     gameScene = this;
     gameStarted = false;
+    currentPhase = 1;
+    bossSpawned = false;
+    boss = null;
+    score = 0;
     
     let startText = this.add.text(400, 300, 'CLIQUE PARA INICIAR', {
         fontSize: '40px',
@@ -100,6 +119,12 @@ function create() {
 }
 
 function initGame(scene) {
+    currentPhase = 1;
+    bossSpawned = false;
+    boss = null;
+    score = 0;
+    isPaused = false;
+    
     player = scene.physics.add.sprite(400, 500, 'player');
     player.setCollideWorldBounds(true);
     
@@ -119,7 +144,7 @@ function initGame(scene) {
     fireKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     pauseKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     
-    scene.time.addEvent({
+    enemySpawnEvent = scene.time.addEvent({
         delay: 1000,
         callback: spawnEnemy,
         callbackScope: scene,
@@ -130,6 +155,18 @@ function initGame(scene) {
         fontSize: '32px', 
         fill: '#fff' 
     });
+    
+    phaseText = scene.add.text(16, 50, 'Fase: 1', {
+        fontSize: '24px',
+        fill: '#00ff00'
+    });
+    
+    bossHealthText = scene.add.text(400, 50, '', {
+        fontSize: '28px',
+        fill: '#ff0000',
+        backgroundColor: '#000000',
+        padding: { x: 10, y: 5 }
+    }).setOrigin(0.5).setVisible(false);
     
     pauseButton = scene.add.text(700, 16, 'PAUSE', {
         fontSize: '24px',
@@ -166,7 +203,9 @@ function initGame(scene) {
     });
     
     scene.physics.add.overlap(bullets, enemies, hitEnemy, null, scene);
+    scene.physics.add.overlap(bullets, boss, hitBoss, null, scene);
     scene.physics.add.overlap(player, enemies, hitPlayer, null, scene);
+    scene.physics.add.overlap(player, boss, hitPlayer, null, scene);
 }
 
 function update(time, delta) {
@@ -177,6 +216,8 @@ function update(time, delta) {
     }
     
     if (isPaused) return;
+    
+    checkPhase();
     
     if (touchPointer) {
         gameScene.physics.moveToObject(player, touchPointer, PLAYER_SPEED);
@@ -206,6 +247,50 @@ function update(time, delta) {
     });
 }
 
+function checkPhase() {
+    if (score >= BOSS_SCORE && !bossSpawned) {
+        spawnBoss();
+    } else if (score > 0 && score % POINTS_PER_PHASE === 0) {
+        const newPhase = Math.floor(score / POINTS_PER_PHASE);
+        if (newPhase > currentPhase) {
+            currentPhase = newPhase;
+            phaseText.setText('Fase: ' + currentPhase);
+        }
+    }
+}
+
+function spawnBoss() {
+    bossSpawned = true;
+    currentPhase = -1;
+    phaseText.setText('BOSS!');
+    phaseText.setColor('#ff0000');
+    
+    if (enemySpawnEvent) {
+        enemySpawnEvent.remove();
+    }
+    
+    enemies.clear(true, true);
+    
+    boss = enemies.create(400, -50, 'boss');
+    boss.setVelocityY(50);
+    boss.setCollideWorldBounds(true);
+    boss.health = BOSS_MAX_HEALTH;
+    
+    bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
+    bossHealthText.setVisible(true);
+    
+    gameScene.time.addEvent({
+        delay: 2000,
+        callback: () => {
+            if (boss && boss.active) {
+                boss.setVelocityY(0);
+                boss.setVelocityX(Phaser.Math.Between(-100, 100));
+            }
+        },
+        loop: true
+    });
+}
+
 function fireBullet() {
     const bullet = bullets.get(player.x, player.y - 20);
     if (bullet) {
@@ -216,17 +301,43 @@ function fireBullet() {
 }
 
 function spawnEnemy() {
-    if (isPaused) return;
+    if (isPaused || bossSpawned) return;
     const x = Phaser.Math.Between(50, 750);
+    const speed = 150 + (currentPhase * 20);
     const enemy = enemies.create(x, -30, 'enemy');
-    enemy.setVelocityY(150);
+    enemy.setVelocityY(speed);
 }
 
 function hitEnemy(bullet, enemy) {
     bullet.setActive(false).setVisible(false);
     enemy.destroy();
     score += 10;
+    updateScoreText();
+}
+
+function hitBoss(bullet, enemy) {
+    if (enemy !== boss) return;
+    bullet.setActive(false).setVisible(false);
+    boss.health -= BOSS_DAMAGE;
+    bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
+    
+    if (boss.health <= 0) {
+        boss.destroy();
+        boss = null;
+        bossHealthText.setVisible(false);
+        showVictory(gameScene);
+    }
+}
+
+function updateScoreText() {
     scoreText.setText('Score: ' + score);
+    if (score < BOSS_SCORE) {
+        const phase = Math.floor(score / POINTS_PER_PHASE) + 1;
+        if (phase !== currentPhase) {
+            currentPhase = phase;
+            phaseText.setText('Fase: ' + currentPhase);
+        }
+    }
 }
 
 function togglePause(scene) {
@@ -259,13 +370,33 @@ function saveScore(name, newScore) {
     return ranking;
 }
 
-function showGameOver(scene) {
-    const ranking = getRanking();
-    let rankingText = '\n--- RANKING ---\n';
-    ranking.forEach((r, i) => {
-        rankingText += `${i + 1}. ${r.name}: ${r.score}\n`;
-    });
+function showVictory(scene) {
+    scene.physics.pause();
     
+    let name = prompt('PARABENS!\n\nScore Final: ' + score + '\n\nDigite seu nome para o ranking:');
+    if (name && name.trim()) {
+        saveScore(name.trim(), score);
+    }
+    
+    const newRanking = getRanking();
+    let finalText = 'VICTORY!\n\nScore: ' + score + '\n\n--- RANKING ---\n';
+    newRanking.forEach((r, i) => {
+        finalText += `${i + 1}. ${r.name}: ${r.score}\n`;
+    });
+    finalText += '\nClique para reiniciar';
+    
+    scoreText.setText(finalText);
+    scoreText.setFontSize(20);
+    scoreText.setOrigin(0.5);
+    scoreText.setPosition(400, 300);
+    
+    scene.input.on('pointerdown', () => {
+        scene.input.off('pointerdown');
+        scene.scene.restart();
+    });
+}
+
+function showGameOver(scene) {
     scene.physics.pause();
     player.setTint(0xff0000);
     
@@ -287,8 +418,6 @@ function showGameOver(scene) {
     scene.input.on('pointerdown', () => {
         scene.input.off('pointerdown');
         scene.scene.restart();
-        score = 0;
-        scoreText.setFontSize(32);
     });
 }
 
