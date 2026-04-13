@@ -1,1 +1,1 @@
-joguinhonave.netlify.app
+https://terrible-space.vercel.app/
