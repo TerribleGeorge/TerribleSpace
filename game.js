@@ -34,6 +34,7 @@ let pauseText;
 let gameScene;
 let shootSound;
 let explosionSound;
+let music;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -71,6 +72,7 @@ function preload() {
     
     this.load.audio('shoot', 'assets/laser1.ogg');
     this.load.audio('explosion', 'assets/explosao.ogg');
+    this.load.audio('music', 'assets/Kawai Kitsune.mp3');
 }
 
 function create() {
@@ -127,6 +129,11 @@ function create() {
     
     explosionSound = this.sound.add('explosion');
     explosionSound.setVolume(0.5);
+    
+    music = this.sound.add('music');
+    music.setVolume(0.4);
+    music.setLoop(true);
+    music.play();
     
     this.physics.add.overlap(bullets, enemies, hitEnemy, null, this);
     this.physics.add.overlap(player, enemies, hitPlayer, null, this);
