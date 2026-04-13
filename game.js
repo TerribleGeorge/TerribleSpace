@@ -146,6 +146,9 @@ function create() {
     this.input.on('pointerup', () => {
         touchPointer = null;
     });
+    
+    this.physics.add.overlap(bullets, enemies, hitEnemy, null, this);
+    this.physics.add.overlap(player, enemies, hitPlayer, null, this);
 }
 
 function update(time, delta) {
