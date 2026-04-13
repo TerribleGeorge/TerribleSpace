@@ -38,8 +38,6 @@ let pauseText;
 let gameScene;
 let shootSound;
 let music;
-let leftBtn;
-let rightBtn;
 let shootBtn;
 
 function preload() {
@@ -151,40 +149,31 @@ function create() {
             padding: { x: 20, y: 10 }
         }).setOrigin(0.5).setScrollFactor(0);
         
-        leftBtn = this.add.text(50, 500, '◀', {
-            fontSize: '40px',
+        player.setInteractive({ draggable: true });
+        
+        player.on('drag', function(pointer, dragX, dragY) {
+            player.x = dragX;
+            player.y = dragY;
+        });
+        
+        shootBtn = this.add.text(700, 500, '🔥', {
+            fontSize: '50px',
             fill: '#fff',
-            backgroundColor: '#333333',
-            padding: { x: 15, y: 10 }
-        }).setInteractive({ useHandCursor: true });
+            backgroundColor: '#cc0000',
+            padding: { x: 20, y: 15 }
+        }).setInteractive({ useHandCursor: true }).setScrollFactor(0);
         
-        rightBtn = this.add.text(150, 500, '▶', {
-            fontSize: '40px',
-            fill: '#fff',
-            backgroundColor: '#333333',
-            padding: { x: 15, y: 10 }
-        }).setInteractive({ useHandCursor: true });
+        shootBtn.on('pointerdown', function() {
+            fireShootMobile();
+        });
         
-        shootBtn = this.add.text(650, 500, '🔫', {
-            fontSize: '40px',
-            fill: '#fff',
-            backgroundColor: '#333333',
-            padding: { x: 15, y: 10 }
-        }).setInteractive({ useHandCursor: true });
-        
-        leftBtn.setScrollFactor(0);
-        rightBtn.setScrollFactor(0);
-        shootBtn.setScrollFactor(0);
-        
-        leftBtn.on('pointerdown', () => player.setVelocityX(-300));
-        leftBtn.on('pointerup', () => player.setVelocityX(0));
-        leftBtn.on('pointerout', () => player.setVelocityX(0));
-        
-        rightBtn.on('pointerdown', () => player.setVelocityX(300));
-        rightBtn.on('pointerup', () => player.setVelocityX(0));
-        rightBtn.on('pointerout', () => player.setVelocityX(0));
-        
-        shootBtn.on('pointerdown', () => fireShoot(this));
+        this.input.on('pointerdown', function(pointer) {
+            if (pointer.x < 600) {
+                player.x = pointer.x;
+                player.y = pointer.y;
+                player.setVelocity(0, 0);
+            }
+        });
     }
     
     this.physics.add.overlap(bullets, enemies, hitEnemy, null, this);
@@ -258,6 +247,16 @@ function hitEnemy(bullet, enemy) {
     // explosionSound.play();
     score += 10;
     scoreText.setText('Score: ' + score);
+}
+
+function fireShootMobile() {
+    if (isPaused) return;
+    const bullet = bullets.get(player.x, player.y - 20);
+    if (bullet) {
+        bullet.setActive(true).setVisible(true);
+        bullet.setVelocityY(-400);
+        shootSound.play();
+    }
 }
 
 function getRanking() {
