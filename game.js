@@ -86,6 +86,11 @@ function preload() {
     graphics.fillRect(0, 0, 80, 80);
     graphics.generateTexture('boss', 80, 80);
     
+    graphics.clear();
+    graphics.fillStyle(0xff6600);
+    graphics.fillRect(0, 0, 160, 160);
+    graphics.generateTexture('bossBig', 160, 160);
+    
     this.load.audio('shoot', 'assets/laser1.ogg');
     this.load.audio('music', 'assets/Kawai Kitsune.mp3');
 }
@@ -271,20 +276,36 @@ function spawnBoss() {
     
     enemies.clear(true, true);
     
-    boss = enemies.create(400, -50, 'boss');
-    boss.setVelocityY(50);
+    boss = enemies.create(400, -80, 'bossBig');
+    boss.setVelocityY(100);
     boss.setCollideWorldBounds(true);
+    boss.setBounce(1, 1);
+    boss.body.onWorldBounds = true;
     boss.health = BOSS_MAX_HEALTH;
+    
+    boss.setScale(1.5);
+    
+    boss.body.setSize(160, 160);
+    boss.body.setOffset(-80, -80);
     
     bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
     bossHealthText.setVisible(true);
     
+    gameScene.physics.world.on('worldbounds', (body) => {
+        if (body.gameObject === boss && boss.active) {
+            boss.setVelocityX(Phaser.Math.Between(-200, 200));
+            boss.setVelocityY(Phaser.Math.Between(-50, 50));
+        }
+    });
+    
+    boss.body.onWorldBounds = true;
+    
     gameScene.time.addEvent({
-        delay: 2000,
+        delay: 1500,
         callback: () => {
             if (boss && boss.active) {
-                boss.setVelocityY(0);
-                boss.setVelocityX(Phaser.Math.Between(-100, 100));
+                boss.setVelocityX(Phaser.Math.Between(-200, 200));
+                boss.setVelocityY(Phaser.Math.Between(-50, 50));
             }
         },
         loop: true
