@@ -38,6 +38,7 @@ let isPaused = false;
 let pauseButton;
 let pauseText;
 let gameScene;
+let rankingText;
 let shootSound;
 let music;
 let touchPointer;
@@ -187,6 +188,8 @@ function initGame(scene) {
         fill: '#fff',
         align: 'center'
     }).setOrigin(0.5).setVisible(false);
+    
+    updateRankingDisplay(scene);
     
     shootSound = scene.sound.add('shoot');
     shootSound.setVolume(0.5);
@@ -382,6 +385,23 @@ function getRanking() {
     return stored ? JSON.parse(stored) : [];
 }
 
+function updateRankingDisplay(scene) {
+    const ranking = getRanking();
+    let rankingStr = '--- TOP 3 ---\n';
+    for (let i = 0; i < 3; i++) {
+        if (ranking[i]) {
+            rankingStr += `${i + 1}. ${ranking[i].name}: ${ranking[i].score}\n`;
+        } else {
+            rankingStr += `${i + 1}. ---: ---\n`;
+        }
+    }
+    rankingText = scene.add.text(700, 500, rankingStr, {
+        fontSize: '16px',
+        fill: '#00ff00',
+        align: 'right'
+    }).setOrigin(0.5);
+}
+
 function saveScore(name, newScore) {
     let ranking = getRanking();
     ranking.push({ name: name, score: newScore });
@@ -397,6 +417,7 @@ function showVictory(scene) {
     let name = prompt('PARABENS!\n\nScore Final: ' + score + '\n\nDigite seu nome para o ranking:');
     if (name && name.trim()) {
         saveScore(name.trim(), score);
+        updateRankingDisplay(scene);
     }
     
     const newRanking = getRanking();
@@ -424,6 +445,7 @@ function showGameOver(scene) {
     let name = prompt('Game Over! Score: ' + score + '\n\nDigite seu nome para o ranking:');
     if (name && name.trim()) {
         saveScore(name.trim(), score);
+        updateRankingDisplay(scene);
     }
     
     const newRanking = getRanking();
