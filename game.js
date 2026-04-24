@@ -50,7 +50,7 @@ const PLAYER_SPEED = 300;
 const POINTS_PER_PHASE = 500;
 const BOSS_SCORE = 3000;
 const BOSS_MAX_HEALTH = 1000;
-const BOSS_DAMAGE = 20;
+const BOSS_DAMAGE = 50;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -332,7 +332,7 @@ function spawnEnemy() {
 function hitEnemy(bullet, enemy) {
     bullet.setActive(false).setVisible(false);
     enemy.destroy();
-    score += 10;
+    score += 20;
     updateScoreText();
 }
 
