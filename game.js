@@ -56,6 +56,13 @@ let fx;
 let hasShield = false;
 let rapidFireUntil = 0;
 let multishotUntil = 0;
+let shotLevel = 1;
+let invulnerableUntil = 0;
+let playerHp = 0;
+let playerMaxHp = 0;
+let hpBarBg;
+let hpBarFill;
+let hpText;
 const PLAYER_SPEED = 300;
 const POINTS_PER_PHASE = 500;
 const BOSS_SCORE = 3000;
@@ -65,8 +72,12 @@ const BASE_FIRE_COOLDOWN_MS = 200;
 const RAPID_FIRE_COOLDOWN_MS = 90;
 const RAPID_FIRE_DURATION_MS = 8000;
 const MULTISHOT_DURATION_MS = 10000;
-const POWERUP_DROP_CHANCE = 0.18;
+const POWERUP_DROP_CHANCE = 0.22;
 const ENEMY_BULLET_SPEED = 280;
+const INVULNERABLE_MS = 750;
+const PLAYER_MAX_HP = 5;
+const POWERUP_HP_AMOUNT = 2;
+const SHOT_LEVEL_MAX = 3;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -128,6 +139,21 @@ function preload() {
     graphics.generateTexture('powerMulti', 18, 18);
 
     graphics.clear();
+    graphics.fillStyle(0xff3366);
+    graphics.fillCircle(6, 6, 6);
+    graphics.fillCircle(14, 6, 6);
+    graphics.fillTriangle(0, 8, 20, 8, 10, 20);
+    graphics.generateTexture('powerHp', 20, 20);
+
+    graphics.clear();
+    graphics.fillStyle(0xffffff);
+    graphics.fillRect(0, 0, 20, 20);
+    graphics.fillStyle(0x00aaff);
+    graphics.fillRect(3, 9, 14, 3);
+    graphics.fillRect(9, 3, 3, 14);
+    graphics.generateTexture('powerGun', 20, 20);
+
+    graphics.clear();
     graphics.fillStyle(0xffffff);
     graphics.fillCircle(3, 3, 3);
     graphics.generateTexture('spark', 6, 6);
@@ -176,6 +202,10 @@ function initGame(scene) {
     hasShield = false;
     rapidFireUntil = 0;
     multishotUntil = 0;
+    shotLevel = 1;
+    invulnerableUntil = 0;
+    playerMaxHp = PLAYER_MAX_HP;
+    playerHp = playerMaxHp;
     
     player = scene.physics.add.sprite(400, 500, 'player');
     player.setCollideWorldBounds(true);
@@ -229,6 +259,13 @@ function initGame(scene) {
     buffText = scene.add.text(16, 80, '', {
         fontSize: '18px',
         fill: '#ffff00'
+    });
+
+    hpBarBg = scene.add.rectangle(16, 115, 200, 16, 0x333333).setOrigin(0, 0.5);
+    hpBarFill = scene.add.rectangle(16, 115, 200, 16, 0x00ff00).setOrigin(0, 0.5);
+    hpText = scene.add.text(224, 107, `${playerHp}/${playerMaxHp}`, {
+        fontSize: '16px',
+        fill: '#ffffff'
     });
     
     pauseButton = scene.add.text(700, 16, 'PAUSE', {
@@ -309,6 +346,7 @@ function update(time, delta) {
     }
 
     updateBuffHud(time);
+    updateHpHud(time);
     
     if (fireKey && fireKey.isDown && time > lastFired) {
         const cooldown = time < rapidFireUntil ? RAPID_FIRE_COOLDOWN_MS : BASE_FIRE_COOLDOWN_MS;
@@ -409,14 +447,24 @@ function spawnBoss() {
 
 function fireBullet(time) {
     const isMulti = time < multishotUntil;
-    if (isMulti) {
-        spawnPlayerBullet(player.x - 14, player.y - 20, -460, -80);
-        spawnPlayerBullet(player.x, player.y - 20, -520, 0);
-        spawnPlayerBullet(player.x + 14, player.y - 20, -460, 80);
-    } else {
-        spawnPlayerBullet(player.x, player.y - 20, -520, 0);
-    }
+    const level = isMulti ? Math.max(shotLevel, 3) : shotLevel;
+    firePattern(level);
     shootSound.play();
+}
+
+function firePattern(level) {
+    if (level <= 1) {
+        spawnPlayerBullet(player.x, player.y - 20, -520, 0);
+        return;
+    }
+    if (level === 2) {
+        spawnPlayerBullet(player.x - 10, player.y - 20, -500, -40);
+        spawnPlayerBullet(player.x + 10, player.y - 20, -500, 40);
+        return;
+    }
+    spawnPlayerBullet(player.x - 14, player.y - 20, -470, -90);
+    spawnPlayerBullet(player.x, player.y - 20, -520, 0);
+    spawnPlayerBullet(player.x + 14, player.y - 20, -470, 90);
 }
 
 function spawnPlayerBullet(x, y, vy, vx) {
@@ -485,12 +533,21 @@ function maybeDropPowerUp(x, y) {
     const r = Math.random();
     let key = 'powerRapid';
     let type = 'rapid';
-    if (r < 0.33) {
+    if (r < 0.22) {
+        key = 'powerHp';
+        type = 'hp';
+    } else if (r < 0.44) {
         key = 'powerShield';
         type = 'shield';
     } else if (r < 0.66) {
         key = 'powerMulti';
         type = 'multi';
+    } else if (r < 0.83) {
+        key = 'powerRapid';
+        type = 'rapid';
+    } else {
+        key = 'powerGun';
+        type = 'gun';
     }
     const p = powerUps.create(x, y, key);
     p.type = type;
@@ -508,6 +565,12 @@ function collectPowerUp(playerSprite, powerUp) {
         player.setTint(0x00ffff);
     } else if (powerUp.type === 'multi') {
         multishotUntil = now + MULTISHOT_DURATION_MS;
+    } else if (powerUp.type === 'hp') {
+        playerHp = Math.min(playerMaxHp, playerHp + POWERUP_HP_AMOUNT);
+        explodeAt(player.x, player.y, 0xff6699, 16);
+    } else if (powerUp.type === 'gun') {
+        shotLevel = Math.min(SHOT_LEVEL_MAX, shotLevel + 1);
+        explodeAt(player.x, player.y, 0x66ccff, 16);
     }
     explodeAt(powerUp.x, powerUp.y, 0x66ff66, 12);
     powerUp.destroy();
@@ -518,9 +581,26 @@ function updateBuffHud(time) {
     if (hasShield) parts.push('SHIELD');
     if (time < rapidFireUntil) parts.push('RAPID ' + Math.ceil((rapidFireUntil - time) / 1000) + 's');
     if (time < multishotUntil) parts.push('MULTI ' + Math.ceil((multishotUntil - time) / 1000) + 's');
+    parts.push('GUN ' + shotLevel);
     buffText.setText(parts.length ? parts.join(' | ') : '');
     if (!hasShield && player && player.active) {
         player.clearTint();
+    }
+}
+
+function updateHpHud(time) {
+    const ratio = playerMaxHp > 0 ? (playerHp / playerMaxHp) : 0;
+    hpBarFill.width = 200 * Phaser.Math.Clamp(ratio, 0, 1);
+    if (ratio > 0.6) hpBarFill.fillColor = 0x00ff00;
+    else if (ratio > 0.3) hpBarFill.fillColor = 0xffff00;
+    else hpBarFill.fillColor = 0xff3333;
+    hpText.setText(`${playerHp}/${playerMaxHp}`);
+
+    if (time < invulnerableUntil) {
+        const blink = Math.sin(time / 60) > 0 ? 0.35 : 1;
+        player.setAlpha(blink);
+    } else if (player.alpha !== 1) {
+        player.setAlpha(1);
     }
 }
 
@@ -659,25 +739,43 @@ function showGameOver(scene) {
 
 function hitPlayerEnemy(playerSprite, enemy) {
     if (isPaused) return;
+    const now = gameScene.time.now;
+    if (now < invulnerableUntil) return;
     if (hasShield) {
         hasShield = false;
+        invulnerableUntil = now + INVULNERABLE_MS;
         explodeAt(player.x, player.y, 0x00ffff, 24);
         flashSprite(player);
         if (enemy && enemy !== boss) enemy.destroy();
         return;
     }
     if (enemy && enemy !== boss) enemy.destroy();
-    showGameOver(gameScene);
+    damagePlayer(1);
 }
 
 function hitPlayerBullet(playerSprite, bullet) {
     if (isPaused) return;
+    const now = gameScene.time.now;
     bullet.disableBody(true, true);
+    if (now < invulnerableUntil) return;
     if (hasShield) {
         hasShield = false;
+        invulnerableUntil = now + INVULNERABLE_MS;
         explodeAt(player.x, player.y, 0x00ffff, 24);
         flashSprite(player);
         return;
     }
-    showGameOver(gameScene);
+    damagePlayer(1);
+}
+
+function damagePlayer(amount) {
+    const now = gameScene.time.now;
+    playerHp -= amount;
+    invulnerableUntil = now + INVULNERABLE_MS;
+    explodeAt(player.x, player.y, 0xffffff, 14);
+    flashSprite(player);
+    if (playerHp <= 0) {
+        player.setAlpha(1);
+        showGameOver(gameScene);
+    }
 }
