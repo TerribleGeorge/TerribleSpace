@@ -76,6 +76,7 @@ let starfieldFar;
 let starfieldNear;
 let bossBarBg;
 let bossBarFill;
+let playerTrail;
 const PLAYER_SPEED = 300;
 const POINTS_PER_PHASE = 500;
 const BOSS_SCORE = 3000;
@@ -383,6 +384,8 @@ function initGame(scene) {
 
     player = scene.physics.add.sprite(400, 500, 'player');
     player.setCollideWorldBounds(true);
+    player.setDrag(800);
+    player.setMaxVelocity(400);
     
     bullets = scene.physics.add.group({
         defaultKey: 'bullet',
@@ -480,6 +483,18 @@ function initGame(scene) {
         blendMode: 'ADD',
         emitting: false
     });
+
+    playerTrail = scene.add.particles(0, 0, 'spark', {
+        speed: { min: 20, max: 50 },
+        scale: { start: 0.6, end: 0 },
+        alpha: { start: 0.5, end: 0 },
+        lifespan: 400,
+        blendMode: 'ADD',
+        follow: player,
+        followOffset: { x: 0, y: 20 },
+        frequency: 40,
+        tint: 0x00ff00
+    });
     
     scene.input.on('pointerdown', (pointer) => {
         if (pointer.x < 650) {
@@ -525,12 +540,23 @@ function update(time, delta) {
     
     if (touchPointer) {
         gameScene.physics.moveToObject(player, touchPointer, PLAYER_SPEED);
-    } else if (cursors.left.isDown) {
-        player.setVelocityX(-300);
-    } else if (cursors.right.isDown) {
-        player.setVelocityX(300);
-    } else if (!touchPointer) {
-        player.setVelocityX(0);
+    } else {
+        const accel = 1200;
+        if (cursors.left.isDown) {
+            player.setAccelerationX(-accel);
+        } else if (cursors.right.isDown) {
+            player.setAccelerationX(accel);
+        } else {
+            player.setAccelerationX(0);
+        }
+
+        if (cursors.up.isDown) {
+            player.setAccelerationY(-accel);
+        } else if (cursors.down.isDown) {
+            player.setAccelerationY(accel);
+        } else {
+            player.setAccelerationY(0);
+        }
     }
 
     updateBuffHud(time);
@@ -813,6 +839,13 @@ function updateBuffHud(time) {
     else if (multiStacks > 0) parts.push('MULTI ' + multiStacks + '/' + POWERUP_STACKS_FOR_PERMANENT + ' (' + Math.ceil((multishotUntil - time) / 1000) + 's)');
     parts.push('GUN ' + shotLevel);
     buffText.setText(parts.length ? parts.join(' | ') : '');
+    
+    if (playerTrail) {
+        if (hasShield) playerTrail.particleTint = 0x00ffff;
+        else if (rapidPermanent || multiPermanent) playerTrail.particleTint = 0xffff00;
+        else playerTrail.particleTint = 0x00ff00;
+    }
+
     if (!hasShield && player && player.active) {
         player.clearTint();
     }
@@ -820,7 +853,17 @@ function updateBuffHud(time) {
 
 function updateHpHud(time) {
     const ratio = playerMaxHp > 0 ? (playerHp / playerMaxHp) : 0;
-    hpBarFill.width = 200 * Phaser.Math.Clamp(ratio, 0, 1);
+    const targetWidth = 200 * Phaser.Math.Clamp(ratio, 0, 1);
+    
+    if (hpBarFill.width !== targetWidth) {
+        gameScene.tweens.add({
+            targets: hpBarFill,
+            width: targetWidth,
+            duration: 250,
+            ease: 'Power2'
+        });
+    }
+
     if (ratio > 0.6) hpBarFill.fillColor = 0x00ff00;
     else if (ratio > 0.3) hpBarFill.fillColor = 0xffff00;
     else hpBarFill.fillColor = 0xff3333;
@@ -1018,6 +1061,7 @@ function damagePlayer(amount) {
     invulnerableUntil = now + INVULNERABLE_MS;
     explodeAt(player.x, player.y, 0xffffff, 14);
     flashSprite(player);
+    gameScene.cameras.main.shake(150, 0.015);
     if (playerHp <= 0) {
         player.setAlpha(1);
         showGameOver(gameScene);
