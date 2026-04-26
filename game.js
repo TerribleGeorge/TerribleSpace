@@ -56,6 +56,10 @@ let fx;
 let hasShield = false;
 let rapidFireUntil = 0;
 let multishotUntil = 0;
+let rapidStacks = 0;
+let multiStacks = 0;
+let rapidPermanent = false;
+let multiPermanent = false;
 let shotLevel = 1;
 let invulnerableUntil = 0;
 let playerHp = 0;
@@ -78,6 +82,7 @@ const INVULNERABLE_MS = 750;
 const PLAYER_MAX_HP = 5;
 const POWERUP_HP_AMOUNT = 2;
 const SHOT_LEVEL_MAX = 3;
+const POWERUP_STACKS_FOR_PERMANENT = 3;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -222,6 +227,10 @@ function initGame(scene) {
     hasShield = false;
     rapidFireUntil = 0;
     multishotUntil = 0;
+    rapidStacks = 0;
+    multiStacks = 0;
+    rapidPermanent = false;
+    multiPermanent = false;
     shotLevel = 1;
     invulnerableUntil = 0;
     playerMaxHp = PLAYER_MAX_HP;
@@ -369,7 +378,8 @@ function update(time, delta) {
     updateHpHud(time);
     
     if (fireKey && fireKey.isDown && time > lastFired) {
-        const cooldown = time < rapidFireUntil ? RAPID_FIRE_COOLDOWN_MS : BASE_FIRE_COOLDOWN_MS;
+        const rapidActive = rapidPermanent || time < rapidFireUntil;
+        const cooldown = rapidActive ? RAPID_FIRE_COOLDOWN_MS : BASE_FIRE_COOLDOWN_MS;
         fireBullet(time);
         lastFired = time + cooldown;
     }
@@ -467,7 +477,7 @@ function spawnBoss() {
 }
 
 function fireBullet(time) {
-    const isMulti = time < multishotUntil;
+    const isMulti = multiPermanent || time < multishotUntil;
     const level = isMulti ? Math.max(shotLevel, 3) : shotLevel;
     firePattern(level);
     shootSound.play();
@@ -580,12 +590,16 @@ function collectPowerUp(playerSprite, powerUp) {
     if (!powerUp) return;
     const now = gameScene.time.now;
     if (powerUp.type === 'rapid') {
-        rapidFireUntil = now + RAPID_FIRE_DURATION_MS;
+        rapidStacks = Math.min(POWERUP_STACKS_FOR_PERMANENT, rapidStacks + 1);
+        rapidPermanent = rapidStacks >= POWERUP_STACKS_FOR_PERMANENT;
+        if (!rapidPermanent) rapidFireUntil = now + RAPID_FIRE_DURATION_MS;
     } else if (powerUp.type === 'shield') {
         hasShield = true;
         player.setTint(0x00ffff);
     } else if (powerUp.type === 'multi') {
-        multishotUntil = now + MULTISHOT_DURATION_MS;
+        multiStacks = Math.min(POWERUP_STACKS_FOR_PERMANENT, multiStacks + 1);
+        multiPermanent = multiStacks >= POWERUP_STACKS_FOR_PERMANENT;
+        if (!multiPermanent) multishotUntil = now + MULTISHOT_DURATION_MS;
     } else if (powerUp.type === 'hp') {
         playerHp = Math.min(playerMaxHp, playerHp + POWERUP_HP_AMOUNT);
         explodeAt(player.x, player.y, 0xff6699, 16);
@@ -600,8 +614,10 @@ function collectPowerUp(playerSprite, powerUp) {
 function updateBuffHud(time) {
     let parts = [];
     if (hasShield) parts.push('SHIELD');
-    if (time < rapidFireUntil) parts.push('RAPID ' + Math.ceil((rapidFireUntil - time) / 1000) + 's');
-    if (time < multishotUntil) parts.push('MULTI ' + Math.ceil((multishotUntil - time) / 1000) + 's');
+    if (rapidPermanent) parts.push('RAPID MAX');
+    else if (rapidStacks > 0) parts.push('RAPID ' + rapidStacks + '/' + POWERUP_STACKS_FOR_PERMANENT + ' (' + Math.ceil((rapidFireUntil - time) / 1000) + 's)');
+    if (multiPermanent) parts.push('MULTI MAX');
+    else if (multiStacks > 0) parts.push('MULTI ' + multiStacks + '/' + POWERUP_STACKS_FOR_PERMANENT + ' (' + Math.ceil((multishotUntil - time) / 1000) + 's)');
     parts.push('GUN ' + shotLevel);
     buffText.setText(parts.length ? parts.join(' | ') : '');
     if (!hasShield && player && player.active) {
