@@ -441,8 +441,9 @@ function spawnBoss() {
     bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
     bossHealthText.setVisible(true);
 
-    gameScene.physics.add.overlap(bullets, boss, hitBoss, null, gameScene);
-    gameScene.physics.add.overlap(player, boss, hitPlayerEnemy, null, gameScene);
+    // Use bossGroup for reliable overlaps (avoids stale boss references)
+    gameScene.physics.add.overlap(bullets, bossGroup, hitBoss, null, gameScene);
+    gameScene.physics.add.overlap(player, bossGroup, hitPlayerEnemy, null, gameScene);
     
     gameScene.physics.world.on('worldbounds', (body) => {
         if (body.gameObject === boss && boss.active) {
@@ -519,16 +520,16 @@ function hitEnemy(bullet, enemy) {
     updateScoreText();
 }
 
-function hitBoss(bullet, enemy) {
-    if (enemy !== boss) return;
+function hitBoss(bullet, bossSprite) {
     bullet.disableBody(true, true);
-    boss.health -= BOSS_DAMAGE;
-    bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
-    flashSprite(boss);
+    if (!bossSprite || !bossSprite.active) return;
+    bossSprite.health -= BOSS_DAMAGE;
+    bossHealthText.setText('BOSS: ' + bossSprite.health + '/' + BOSS_MAX_HEALTH);
+    flashSprite(bossSprite);
     
-    if (boss.health <= 0) {
-        explodeAt(boss.x, boss.y, 0xffaa00, 40);
-        boss.destroy();
+    if (bossSprite.health <= 0) {
+        explodeAt(bossSprite.x, bossSprite.y, 0xffaa00, 40);
+        bossSprite.destroy();
         boss = null;
         bossHealthText.setVisible(false);
         showVictory(gameScene);
