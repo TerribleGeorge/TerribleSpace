@@ -15,6 +15,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "phaser": "^4.0.0"
+    "phaser": "^3.60.0"
   }
 }

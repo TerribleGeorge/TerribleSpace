@@ -26,11 +26,14 @@ const game = new Phaser.Game(config);
 let player;
 let bullets;
 let enemies;
+let enemyBullets;
+let powerUps;
 let lastFired = 0;
 let score = 0;
 let scoreText;
 let phaseText;
 let bossHealthText;
+let buffText;
 let cursors;
 let fireKey;
 let pauseKey;
@@ -46,12 +49,24 @@ let gameStarted = false;
 let currentPhase = 1;
 let boss = null;
 let bossSpawned = false;
+let bossGroup;
 let enemySpawnEvent;
+let enemyShootEvent;
+let fx;
+let hasShield = false;
+let rapidFireUntil = 0;
+let multishotUntil = 0;
 const PLAYER_SPEED = 300;
 const POINTS_PER_PHASE = 500;
 const BOSS_SCORE = 3000;
 const BOSS_MAX_HEALTH = 1000;
 const BOSS_DAMAGE = 50;
+const BASE_FIRE_COOLDOWN_MS = 200;
+const RAPID_FIRE_COOLDOWN_MS = 90;
+const RAPID_FIRE_DURATION_MS = 8000;
+const MULTISHOT_DURATION_MS = 10000;
+const POWERUP_DROP_CHANCE = 0.18;
+const ENEMY_BULLET_SPEED = 280;
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -81,6 +96,11 @@ function preload() {
     graphics.fillStyle(0xffff00);
     graphics.fillRect(0, 0, 10, 20);
     graphics.generateTexture('bullet', 10, 20);
+
+    graphics.clear();
+    graphics.fillStyle(0xff33ff);
+    graphics.fillRect(0, 0, 8, 16);
+    graphics.generateTexture('enemyBullet', 8, 16);
     
     graphics.clear();
     graphics.fillStyle(0xff6600);
@@ -91,6 +111,26 @@ function preload() {
     graphics.fillStyle(0xff6600);
     graphics.fillRect(0, 0, 160, 160);
     graphics.generateTexture('bossBig', 160, 160);
+
+    graphics.clear();
+    graphics.fillStyle(0x66ccff);
+    graphics.fillRect(0, 0, 18, 18);
+    graphics.generateTexture('powerRapid', 18, 18);
+
+    graphics.clear();
+    graphics.fillStyle(0x00ffff);
+    graphics.fillCircle(9, 9, 9);
+    graphics.generateTexture('powerShield', 18, 18);
+
+    graphics.clear();
+    graphics.fillStyle(0xffdd00);
+    graphics.fillTriangle(9, 0, 18, 18, 0, 18);
+    graphics.generateTexture('powerMulti', 18, 18);
+
+    graphics.clear();
+    graphics.fillStyle(0xffffff);
+    graphics.fillCircle(3, 3, 3);
+    graphics.generateTexture('spark', 6, 6);
     
     this.load.audio('shoot', 'assets/laser1.ogg');
     this.load.audio('music', 'assets/Kawai Kitsune.mp3');
@@ -128,8 +168,14 @@ function initGame(scene) {
     currentPhase = 1;
     bossSpawned = false;
     boss = null;
+    bossGroup = null;
+    enemyShootEvent = null;
+    fx = null;
     score = 0;
     isPaused = false;
+    hasShield = false;
+    rapidFireUntil = 0;
+    multishotUntil = 0;
     
     player = scene.physics.add.sprite(400, 500, 'player');
     player.setCollideWorldBounds(true);
@@ -140,6 +186,12 @@ function initGame(scene) {
     });
     
     enemies = scene.physics.add.group();
+    bossGroup = scene.physics.add.group();
+    enemyBullets = scene.physics.add.group({
+        defaultKey: 'enemyBullet',
+        maxSize: 80
+    });
+    powerUps = scene.physics.add.group();
     
     cursors = scene.input.keyboard.addKeys({
         up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -173,6 +225,11 @@ function initGame(scene) {
         backgroundColor: '#000000',
         padding: { x: 10, y: 5 }
     }).setOrigin(0.5).setVisible(false);
+
+    buffText = scene.add.text(16, 80, '', {
+        fontSize: '18px',
+        fill: '#ffff00'
+    });
     
     pauseButton = scene.add.text(700, 16, 'PAUSE', {
         fontSize: '24px',
@@ -193,6 +250,14 @@ function initGame(scene) {
     
     shootSound = scene.sound.add('shoot');
     shootSound.setVolume(0.5);
+
+    fx = scene.add.particles(0, 0, 'spark', {
+        speed: { min: 60, max: 240 },
+        scale: { start: 1.0, end: 0 },
+        lifespan: 350,
+        blendMode: 'ADD',
+        emitting: false
+    });
     
     scene.input.on('pointerdown', (pointer) => {
         if (pointer.x < 650) {
@@ -211,18 +276,24 @@ function initGame(scene) {
     });
     
     scene.physics.add.overlap(bullets, enemies, hitEnemy, null, scene);
-    scene.physics.add.overlap(bullets, boss, hitBoss, null, scene);
-    scene.physics.add.overlap(player, enemies, hitPlayer, null, scene);
-    scene.physics.add.overlap(player, boss, hitPlayer, null, scene);
+    scene.physics.add.overlap(player, enemies, hitPlayerEnemy, null, scene);
+    scene.physics.add.overlap(player, enemyBullets, hitPlayerBullet, null, scene);
+    scene.physics.add.overlap(player, powerUps, collectPowerUp, null, scene);
+
+    enemyShootEvent = scene.time.addEvent({
+        delay: 800,
+        callback: enemyShoot,
+        callbackScope: scene,
+        loop: true
+    });
 }
 
 function update(time, delta) {
     if (!gameScene || !gameStarted || !cursors || !player) return;
     
-    if (pauseKey && pauseKey.isDown && !isPaused) {
+    if (pauseKey && Phaser.Input.Keyboard.JustDown(pauseKey)) {
         togglePause(gameScene);
     }
-    
     if (isPaused) return;
     
     checkPhase();
@@ -236,15 +307,30 @@ function update(time, delta) {
     } else if (!touchPointer) {
         player.setVelocityX(0);
     }
+
+    updateBuffHud(time);
     
     if (fireKey && fireKey.isDown && time > lastFired) {
-        fireBullet();
-        lastFired = time + 200;
+        const cooldown = time < rapidFireUntil ? RAPID_FIRE_COOLDOWN_MS : BASE_FIRE_COOLDOWN_MS;
+        fireBullet(time);
+        lastFired = time + cooldown;
     }
     
     bullets.getChildren().forEach((b) => {
         if (b && b.y < -20) {
-            b.destroy();
+            b.disableBody(true, true);
+        }
+    });
+
+    enemyBullets.getChildren().forEach((b) => {
+        if (b && (b.y < -40 || b.y > 640 || b.x < -40 || b.x > 840)) {
+            b.disableBody(true, true);
+        }
+    });
+
+    powerUps.getChildren().forEach((p) => {
+        if (p && p.y > 640) {
+            p.destroy();
         }
     });
     
@@ -276,10 +362,13 @@ function spawnBoss() {
     if (enemySpawnEvent) {
         enemySpawnEvent.remove();
     }
+    if (enemyShootEvent) {
+        enemyShootEvent.remove();
+    }
     
     enemies.clear(true, true);
     
-    boss = enemies.create(400, -80, 'bossBig');
+    boss = bossGroup.create(400, -80, 'bossBig');
     boss.setVelocityY(100);
     boss.setCollideWorldBounds(true);
     boss.setBounce(1, 1);
@@ -293,6 +382,9 @@ function spawnBoss() {
     
     bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
     bossHealthText.setVisible(true);
+
+    gameScene.physics.add.overlap(bullets, boss, hitBoss, null, gameScene);
+    gameScene.physics.add.overlap(player, boss, hitPlayerEnemy, null, gameScene);
     
     gameScene.physics.world.on('worldbounds', (body) => {
         if (body.gameObject === boss && boss.active) {
@@ -315,13 +407,24 @@ function spawnBoss() {
     });
 }
 
-function fireBullet() {
-    const bullet = bullets.get(player.x, player.y - 20);
-    if (bullet) {
-        bullet.setActive(true).setVisible(true);
-        bullet.setVelocityY(-400);
-        shootSound.play();
+function fireBullet(time) {
+    const isMulti = time < multishotUntil;
+    if (isMulti) {
+        spawnPlayerBullet(player.x - 14, player.y - 20, -460, -80);
+        spawnPlayerBullet(player.x, player.y - 20, -520, 0);
+        spawnPlayerBullet(player.x + 14, player.y - 20, -460, 80);
+    } else {
+        spawnPlayerBullet(player.x, player.y - 20, -520, 0);
     }
+    shootSound.play();
+}
+
+function spawnPlayerBullet(x, y, vy, vx) {
+    const bullet = bullets.get(x, y);
+    if (!bullet) return;
+    bullet.setActive(true).setVisible(true);
+    bullet.body.enable = true;
+    bullet.setVelocity(vx, vy);
 }
 
 function spawnEnemy() {
@@ -330,27 +433,115 @@ function spawnEnemy() {
     const speed = 150 + (currentPhase * 20);
     const enemy = enemies.create(x, -30, 'enemy');
     enemy.setVelocityY(speed);
+    enemy.isShooter = Math.random() < 0.25;
+    if (enemy.isShooter) {
+        enemy.setTint(0x66ccff);
+    }
 }
 
 function hitEnemy(bullet, enemy) {
-    bullet.setActive(false).setVisible(false);
+    if (enemy === boss) return;
+    bullet.disableBody(true, true);
+    const ex = enemy.x;
+    const ey = enemy.y;
     enemy.destroy();
+    explodeAt(ex, ey, 0xff3300);
+    maybeDropPowerUp(ex, ey);
     score += 20;
     updateScoreText();
 }
 
 function hitBoss(bullet, enemy) {
     if (enemy !== boss) return;
-    bullet.setActive(false).setVisible(false);
+    bullet.disableBody(true, true);
     boss.health -= BOSS_DAMAGE;
     bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
+    flashSprite(boss);
     
     if (boss.health <= 0) {
+        explodeAt(boss.x, boss.y, 0xffaa00, 40);
         boss.destroy();
         boss = null;
         bossHealthText.setVisible(false);
         showVictory(gameScene);
     }
+}
+
+function explodeAt(x, y, tint = 0xffffff, count = 18) {
+    if (!fx) return;
+    fx.emitParticleAt(x, y, count, { tint });
+}
+
+function flashSprite(sprite) {
+    if (!sprite || !sprite.active) return;
+    sprite.setTintFill(0xffffff);
+    gameScene.time.delayedCall(60, () => {
+        if (sprite && sprite.active) sprite.clearTint();
+    });
+}
+
+function maybeDropPowerUp(x, y) {
+    if (Math.random() > POWERUP_DROP_CHANCE) return;
+    const r = Math.random();
+    let key = 'powerRapid';
+    let type = 'rapid';
+    if (r < 0.33) {
+        key = 'powerShield';
+        type = 'shield';
+    } else if (r < 0.66) {
+        key = 'powerMulti';
+        type = 'multi';
+    }
+    const p = powerUps.create(x, y, key);
+    p.type = type;
+    p.setVelocityY(140);
+    p.setCollideWorldBounds(false);
+}
+
+function collectPowerUp(playerSprite, powerUp) {
+    if (!powerUp) return;
+    const now = gameScene.time.now;
+    if (powerUp.type === 'rapid') {
+        rapidFireUntil = now + RAPID_FIRE_DURATION_MS;
+    } else if (powerUp.type === 'shield') {
+        hasShield = true;
+        player.setTint(0x00ffff);
+    } else if (powerUp.type === 'multi') {
+        multishotUntil = now + MULTISHOT_DURATION_MS;
+    }
+    explodeAt(powerUp.x, powerUp.y, 0x66ff66, 12);
+    powerUp.destroy();
+}
+
+function updateBuffHud(time) {
+    let parts = [];
+    if (hasShield) parts.push('SHIELD');
+    if (time < rapidFireUntil) parts.push('RAPID ' + Math.ceil((rapidFireUntil - time) / 1000) + 's');
+    if (time < multishotUntil) parts.push('MULTI ' + Math.ceil((multishotUntil - time) / 1000) + 's');
+    buffText.setText(parts.length ? parts.join(' | ') : '');
+    if (!hasShield && player && player.active) {
+        player.clearTint();
+    }
+}
+
+function enemyShoot() {
+    if (isPaused || bossSpawned) return;
+    if (!player || !player.active) return;
+    const list = enemies.getChildren().filter((e) => e && e.active);
+    if (!list.length) return;
+    const shooter = Phaser.Utils.Array.GetRandom(list);
+    if (!shooter) return;
+    if (!shooter.isShooter && Math.random() < 0.6) return;
+    fireEnemyBullet(shooter);
+}
+
+function fireEnemyBullet(fromEnemy) {
+    const b = enemyBullets.get(fromEnemy.x, fromEnemy.y + 10);
+    if (!b) return;
+    b.setActive(true).setVisible(true);
+    b.body.enable = true;
+    b.setPosition(fromEnemy.x, fromEnemy.y + 10);
+    gameScene.physics.moveToObject(b, player, ENEMY_BULLET_SPEED);
 }
 
 function updateScoreText() {
@@ -395,11 +586,15 @@ function updateRankingDisplay(scene) {
             rankingStr += `${i + 1}. ---: ---\n`;
         }
     }
-    rankingText = scene.add.text(700, 500, rankingStr, {
-        fontSize: '16px',
-        fill: '#00ff00',
-        align: 'right'
-    }).setOrigin(0.5);
+    if (rankingText) {
+        rankingText.setText(rankingStr);
+    } else {
+        rankingText = scene.add.text(700, 500, rankingStr, {
+            fontSize: '16px',
+            fill: '#00ff00',
+            align: 'right'
+        }).setOrigin(0.5);
+    }
 }
 
 function saveScore(name, newScore) {
@@ -432,8 +627,7 @@ function showVictory(scene) {
     scoreText.setOrigin(0.5);
     scoreText.setPosition(400, 300);
     
-    scene.input.on('pointerdown', () => {
-        scene.input.off('pointerdown');
+    scene.input.once('pointerdown', () => {
         scene.scene.restart();
     });
 }
@@ -458,13 +652,32 @@ function showGameOver(scene) {
     scoreText.setText(finalText);
     scoreText.setFontSize(20);
     
-    scene.input.on('pointerdown', () => {
-        scene.input.off('pointerdown');
+    scene.input.once('pointerdown', () => {
         scene.scene.restart();
     });
 }
 
-function hitPlayer(playerSprite, enemy) {
-    enemy.destroy();
+function hitPlayerEnemy(playerSprite, enemy) {
+    if (isPaused) return;
+    if (hasShield) {
+        hasShield = false;
+        explodeAt(player.x, player.y, 0x00ffff, 24);
+        flashSprite(player);
+        if (enemy && enemy !== boss) enemy.destroy();
+        return;
+    }
+    if (enemy && enemy !== boss) enemy.destroy();
+    showGameOver(gameScene);
+}
+
+function hitPlayerBullet(playerSprite, bullet) {
+    if (isPaused) return;
+    bullet.disableBody(true, true);
+    if (hasShield) {
+        hasShield = false;
+        explodeAt(player.x, player.y, 0x00ffff, 24);
+        flashSprite(player);
+        return;
+    }
     showGameOver(gameScene);
 }
