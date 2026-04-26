@@ -70,6 +70,12 @@ let hpText;
 let difficultyKey = 'moderado';
 let difficulty;
 let bossShootEvent;
+let soundMuted = false;
+let soundButton;
+let starfieldFar;
+let starfieldNear;
+let bossBarBg;
+let bossBarFill;
 const PLAYER_SPEED = 300;
 const POINTS_PER_PHASE = 500;
 const BOSS_SCORE = 3000;
@@ -236,6 +242,24 @@ function preload() {
     graphics.fillStyle(0xffffff);
     graphics.fillCircle(3, 3, 3);
     graphics.generateTexture('spark', 6, 6);
+
+    graphics.clear();
+    graphics.fillStyle(0x000000);
+    graphics.fillRect(0, 0, 256, 256);
+    graphics.fillStyle(0xffffff, 0.9);
+    for (let i = 0; i < 140; i++) {
+        graphics.fillCircle(Phaser.Math.Between(0, 255), Phaser.Math.Between(0, 255), Phaser.Math.Between(1, 2));
+    }
+    graphics.generateTexture('starfieldFar', 256, 256);
+
+    graphics.clear();
+    graphics.fillStyle(0x000000);
+    graphics.fillRect(0, 0, 256, 256);
+    graphics.fillStyle(0xffffff, 1);
+    for (let i = 0; i < 80; i++) {
+        graphics.fillCircle(Phaser.Math.Between(0, 255), Phaser.Math.Between(0, 255), Phaser.Math.Between(1, 3));
+    }
+    graphics.generateTexture('starfieldNear', 256, 256);
     
     this.load.audio('shoot', 'assets/laser1.ogg');
     this.load.audio('music', 'assets/Kawai Kitsune.mp3');
@@ -249,15 +273,36 @@ function create() {
     boss = null;
     score = 0;
 
-    const title = this.add.text(400, 170, 'SPACE SHOOTER', {
+    starfieldFar = this.add.tileSprite(400, 300, 800, 600, 'starfieldFar').setAlpha(0.55);
+    starfieldNear = this.add.tileSprite(400, 300, 800, 600, 'starfieldNear').setAlpha(0.75);
+
+    const title = this.add.text(400, 155, 'SPACE SHOOTER', {
         fontSize: '48px',
         fill: '#ffffff'
     }).setOrigin(0.5);
 
-    const subtitle = this.add.text(400, 230, 'Escolha a dificuldade', {
+    const subtitle = this.add.text(400, 215, 'Escolha a dificuldade', {
         fontSize: '22px',
         fill: '#cccccc'
     }).setOrigin(0.5);
+
+    const hint = this.add.text(400, 250, 'WASD para mover | Espaço para atirar | ESC para pausar', {
+        fontSize: '16px',
+        fill: '#aaaaaa'
+    }).setOrigin(0.5);
+
+    const hint2 = this.add.text(400, 270, 'No mobile: toque e arraste para mover', {
+        fontSize: '16px',
+        fill: '#888888'
+    }).setOrigin(0.5);
+
+    soundButton = this.add.text(730, 16, soundMuted ? 'SOM: OFF' : 'SOM: ON', {
+        fontSize: '18px',
+        fill: '#fff',
+        backgroundColor: '#222222',
+        padding: { x: 10, y: 6 }
+    }).setInteractive({ useHandCursor: true });
+    soundButton.on('pointerdown', () => toggleSound(this));
 
     const options = [
         { key: 'facil', y: 300 },
@@ -290,16 +335,22 @@ function create() {
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     startBtn.on('pointerdown', () => {
-        [title, subtitle, startBtn, ...buttons].forEach((o) => o.destroy());
-        difficulty = DIFFICULTIES[difficultyKey] || DIFFICULTIES.moderado;
-        gameStarted = true;
+        const camera = this.cameras.main;
+        camera.fadeOut(200, 0, 0, 0);
+        this.time.delayedCall(210, () => {
+            [title, subtitle, hint, hint2, startBtn, soundButton, ...buttons].forEach((o) => o.destroy());
+            if (starfieldFar) starfieldFar.destroy();
+            if (starfieldNear) starfieldNear.destroy();
+            difficulty = DIFFICULTIES[difficultyKey] || DIFFICULTIES.moderado;
+            gameStarted = true;
 
-        music = this.sound.add('music');
-        music.setVolume(0.4);
-        music.setLoop(true);
-        music.play();
+            music = this.sound.add('music');
+            music.setVolume(0.4);
+            music.setLoop(true);
+            if (!soundMuted) music.play();
 
-        initGame(this);
+            initGame(this);
+        });
     });
 }
 
@@ -325,6 +376,11 @@ function initGame(scene) {
     playerMaxHp = PLAYER_MAX_HP;
     playerHp = playerMaxHp;
     
+    scene.cameras.main.fadeIn(250, 0, 0, 0);
+
+    starfieldFar = scene.add.tileSprite(400, 300, 800, 600, 'starfieldFar').setAlpha(0.55);
+    starfieldNear = scene.add.tileSprite(400, 300, 800, 600, 'starfieldNear').setAlpha(0.75);
+
     player = scene.physics.add.sprite(400, 500, 'player');
     player.setCollideWorldBounds(true);
     
@@ -374,6 +430,9 @@ function initGame(scene) {
         padding: { x: 10, y: 5 }
     }).setOrigin(0.5).setVisible(false);
 
+    bossBarBg = scene.add.rectangle(250, 90, 300, 14, 0x222222).setOrigin(0, 0.5).setVisible(false);
+    bossBarFill = scene.add.rectangle(250, 90, 300, 14, 0xff3333).setOrigin(0, 0.5).setVisible(false);
+
     buffText = scene.add.text(16, 80, '', {
         fontSize: '18px',
         fill: '#ffff00'
@@ -385,6 +444,14 @@ function initGame(scene) {
         fontSize: '16px',
         fill: '#ffffff'
     });
+
+    soundButton = scene.add.text(700, 52, soundMuted ? 'SOM: OFF' : 'SOM: ON', {
+        fontSize: '16px',
+        fill: '#fff',
+        backgroundColor: '#222222',
+        padding: { x: 8, y: 4 }
+    }).setInteractive({ useHandCursor: true });
+    soundButton.on('pointerdown', () => toggleSound(scene));
     
     pauseButton = scene.add.text(700, 16, 'PAUSE', {
         fontSize: '24px',
@@ -452,6 +519,9 @@ function update(time, delta) {
     if (isPaused) return;
     
     checkPhase();
+
+    if (starfieldFar) starfieldFar.tilePositionY -= 0.25;
+    if (starfieldNear) starfieldNear.tilePositionY -= 0.7;
     
     if (touchPointer) {
         gameScene.physics.moveToObject(player, touchPointer, PLAYER_SPEED);
@@ -542,6 +612,9 @@ function spawnBoss() {
     
     bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
     bossHealthText.setVisible(true);
+    bossBarBg.setVisible(true);
+    bossBarFill.setVisible(true);
+    bossBarFill.width = 300;
 
     // Use bossGroup for reliable overlaps (avoids stale boss references)
     gameScene.physics.add.overlap(bullets, bossGroup, hitBoss, null, gameScene);
@@ -637,6 +710,7 @@ function hitBoss(bullet, bossSprite) {
     score += BOSS_HIT_SCORE;
     updateScoreText();
     bossHealthText.setText('BOSS: ' + bossSprite.health + '/' + BOSS_MAX_HEALTH);
+    bossBarFill.width = 300 * Phaser.Math.Clamp(bossSprite.health / BOSS_MAX_HEALTH, 0, 1);
     flashSprite(bossSprite);
     if (Math.random() < BOSS_DROP_CHANCE_ON_HIT) {
         maybeDropPowerUp(bossSprite.x, bossSprite.y);
@@ -647,8 +721,21 @@ function hitBoss(bullet, bossSprite) {
         bossSprite.destroy();
         boss = null;
         bossHealthText.setVisible(false);
+        bossBarBg.setVisible(false);
+        bossBarFill.setVisible(false);
         showVictory(gameScene);
     }
+}
+
+function toggleSound(scene) {
+    soundMuted = !soundMuted;
+    scene.sound.mute = soundMuted;
+    if (music) {
+        if (soundMuted) music.pause();
+        else if (!music.isPlaying) music.resume();
+    }
+    if (shootSound) shootSound.setMute(soundMuted);
+    if (soundButton) soundButton.setText(soundMuted ? 'SOM: OFF' : 'SOM: ON');
 }
 
 function explodeAt(x, y, tint = 0xffffff, count = 18) {
