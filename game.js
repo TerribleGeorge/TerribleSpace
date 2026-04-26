@@ -67,10 +67,13 @@ let playerMaxHp = 0;
 let hpBarBg;
 let hpBarFill;
 let hpText;
+let difficultyKey = 'moderado';
+let difficulty;
+let bossShootEvent;
 const PLAYER_SPEED = 300;
 const POINTS_PER_PHASE = 500;
 const BOSS_SCORE = 3000;
-const BOSS_MAX_HEALTH = 1000000;
+const BOSS_MAX_HEALTH = 100000;
 const BOSS_DAMAGE = 50;
 const BOSS_HIT_SCORE = 5;
 const BASE_FIRE_COOLDOWN_MS = 200;
@@ -84,6 +87,56 @@ const PLAYER_MAX_HP = 5;
 const POWERUP_HP_AMOUNT = 2;
 const SHOT_LEVEL_MAX = 3;
 const POWERUP_STACKS_FOR_PERMANENT = 3;
+const BOSS_PHASE = 6;
+const BOSS_SCORE_TARGET = (BOSS_PHASE - 1) * POINTS_PER_PHASE;
+const BOSS_DROP_CHANCE_ON_HIT = 0.02;
+
+const DIFFICULTIES = {
+    facil: {
+        label: 'FÁCIL',
+        enemySpawnDelay: 1200,
+        enemyShooterChance: 0.18,
+        enemyShootDelay: 1100,
+        enemyBulletSpeed: 230,
+        powerupDropChance: 0.28,
+        bossShootDelay: 900,
+        bossBulletSpeed: 240,
+        bossScale: 1.15
+    },
+    moderado: {
+        label: 'MODERADO',
+        enemySpawnDelay: 1000,
+        enemyShooterChance: 0.25,
+        enemyShootDelay: 850,
+        enemyBulletSpeed: 280,
+        powerupDropChance: 0.22,
+        bossShootDelay: 750,
+        bossBulletSpeed: 300,
+        bossScale: 1.1
+    },
+    dificil: {
+        label: 'DIFÍCIL',
+        enemySpawnDelay: 850,
+        enemyShooterChance: 0.32,
+        enemyShootDelay: 700,
+        enemyBulletSpeed: 320,
+        powerupDropChance: 0.18,
+        bossShootDelay: 600,
+        bossBulletSpeed: 360,
+        bossScale: 1.05
+    },
+    muito_dificil: {
+        label: 'MUITO DIFÍCIL',
+        enemySpawnDelay: 700,
+        enemyShooterChance: 0.40,
+        enemyShootDelay: 550,
+        enemyBulletSpeed: 380,
+        powerupDropChance: 0.14,
+        bossShootDelay: 480,
+        bossBulletSpeed: 420,
+        bossScale: 1.0
+    }
+};
 
 function preload() {
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
@@ -195,23 +248,57 @@ function create() {
     bossSpawned = false;
     boss = null;
     score = 0;
-    
-    let startText = this.add.text(400, 300, 'CLIQUE PARA INICIAR', {
-        fontSize: '40px',
-        fill: '#fff',
-        backgroundColor: '#000000',
-        padding: { x: 20, y: 10 }
+
+    const title = this.add.text(400, 170, 'SPACE SHOOTER', {
+        fontSize: '48px',
+        fill: '#ffffff'
     }).setOrigin(0.5);
-    
-    this.input.once('pointerdown', () => {
-        startText.destroy();
+
+    const subtitle = this.add.text(400, 230, 'Escolha a dificuldade', {
+        fontSize: '22px',
+        fill: '#cccccc'
+    }).setOrigin(0.5);
+
+    const options = [
+        { key: 'facil', y: 300 },
+        { key: 'moderado', y: 350 },
+        { key: 'dificil', y: 400 },
+        { key: 'muito_dificil', y: 450 }
+    ];
+
+    const buttons = options.map(({ key, y }) => {
+        const label = DIFFICULTIES[key].label;
+        const btn = this.add.text(400, y, label, {
+            fontSize: '28px',
+            fill: key === difficultyKey ? '#00ff00' : '#ffffff',
+            backgroundColor: '#000000',
+            padding: { x: 18, y: 10 }
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        btn.on('pointerdown', () => {
+            difficultyKey = key;
+            buttons.forEach((b) => b.setColor('#ffffff'));
+            btn.setColor('#00ff00');
+        });
+        return btn;
+    });
+
+    const startBtn = this.add.text(400, 520, 'INICIAR', {
+        fontSize: '30px',
+        fill: '#000',
+        backgroundColor: '#00ff00',
+        padding: { x: 22, y: 10 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    startBtn.on('pointerdown', () => {
+        [title, subtitle, startBtn, ...buttons].forEach((o) => o.destroy());
+        difficulty = DIFFICULTIES[difficultyKey] || DIFFICULTIES.moderado;
         gameStarted = true;
-        
+
         music = this.sound.add('music');
         music.setVolume(0.4);
         music.setLoop(true);
         music.play();
-        
+
         initGame(this);
     });
 }
@@ -222,6 +309,7 @@ function initGame(scene) {
     boss = null;
     bossGroup = null;
     enemyShootEvent = null;
+    bossShootEvent = null;
     fx = null;
     score = 0;
     isPaused = false;
@@ -263,7 +351,7 @@ function initGame(scene) {
     pauseKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     
     enemySpawnEvent = scene.time.addEvent({
-        delay: 1000,
+        delay: (difficulty ? difficulty.enemySpawnDelay : 1000),
         callback: spawnEnemy,
         callbackScope: scene,
         loop: true
@@ -348,7 +436,7 @@ function initGame(scene) {
     scene.physics.add.overlap(player, powerUps, collectPowerUp, null, scene);
 
     enemyShootEvent = scene.time.addEvent({
-        delay: 800,
+        delay: (difficulty ? difficulty.enemyShootDelay : 800),
         callback: enemyShoot,
         callbackScope: scene,
         loop: true
@@ -411,9 +499,9 @@ function update(time, delta) {
 }
 
 function checkPhase() {
-    if (score >= BOSS_SCORE && !bossSpawned) {
+    if (score >= BOSS_SCORE_TARGET && !bossSpawned) {
         spawnBoss();
-    } else if (score > 0 && score % POINTS_PER_PHASE === 0) {
+    } else if (!bossSpawned && score > 0 && score % POINTS_PER_PHASE === 0) {
         const newPhase = Math.floor(score / POINTS_PER_PHASE);
         if (newPhase > currentPhase) {
             currentPhase = newPhase;
@@ -424,8 +512,8 @@ function checkPhase() {
 
 function spawnBoss() {
     bossSpawned = true;
-    currentPhase = -1;
-    phaseText.setText('BOSS!');
+    currentPhase = BOSS_PHASE;
+    phaseText.setText('BOSS (Fase ' + BOSS_PHASE + ')');
     phaseText.setColor('#ff0000');
     
     if (enemySpawnEvent) {
@@ -433,6 +521,9 @@ function spawnBoss() {
     }
     if (enemyShootEvent) {
         enemyShootEvent.remove();
+    }
+    if (bossShootEvent) {
+        bossShootEvent.remove();
     }
     
     enemies.clear(true, true);
@@ -444,7 +535,7 @@ function spawnBoss() {
     boss.body.onWorldBounds = true;
     boss.health = BOSS_MAX_HEALTH;
     
-    boss.setScale(1.5);
+    boss.setScale(difficulty ? difficulty.bossScale : 1.1);
     
     // Keep the hitbox centered; negative offsets break overlaps.
     boss.body.setSize(120, 120, true);
@@ -455,6 +546,13 @@ function spawnBoss() {
     // Use bossGroup for reliable overlaps (avoids stale boss references)
     gameScene.physics.add.overlap(bullets, bossGroup, hitBoss, null, gameScene);
     gameScene.physics.add.overlap(player, bossGroup, hitPlayerEnemy, null, gameScene);
+
+    bossShootEvent = gameScene.time.addEvent({
+        delay: (difficulty ? difficulty.bossShootDelay : 750),
+        callback: bossShoot,
+        callbackScope: gameScene,
+        loop: true
+    });
     
     gameScene.physics.world.on('worldbounds', (body) => {
         if (body.gameObject === boss && boss.active) {
@@ -513,7 +611,8 @@ function spawnEnemy() {
     const speed = 150 + (currentPhase * 20);
     const enemy = enemies.create(x, -30, 'enemy');
     enemy.setVelocityY(speed);
-    enemy.isShooter = Math.random() < 0.25;
+    const shooterChance = difficulty ? difficulty.enemyShooterChance : 0.25;
+    enemy.isShooter = Math.random() < shooterChance;
     if (enemy.isShooter) {
         enemy.setTint(0x66ccff);
     }
@@ -539,6 +638,9 @@ function hitBoss(bullet, bossSprite) {
     updateScoreText();
     bossHealthText.setText('BOSS: ' + bossSprite.health + '/' + BOSS_MAX_HEALTH);
     flashSprite(bossSprite);
+    if (Math.random() < BOSS_DROP_CHANCE_ON_HIT) {
+        maybeDropPowerUp(bossSprite.x, bossSprite.y);
+    }
     
     if (bossSprite.health <= 0) {
         explodeAt(bossSprite.x, bossSprite.y, 0xffaa00, 40);
@@ -563,7 +665,8 @@ function flashSprite(sprite) {
 }
 
 function maybeDropPowerUp(x, y) {
-    if (Math.random() > POWERUP_DROP_CHANCE) return;
+    const dropChance = difficulty ? difficulty.powerupDropChance : POWERUP_DROP_CHANCE;
+    if (Math.random() > dropChance) return;
     const r = Math.random();
     let key = 'powerRapid';
     let type = 'rapid';
@@ -661,12 +764,26 @@ function fireEnemyBullet(fromEnemy) {
     b.setActive(true).setVisible(true);
     b.body.enable = true;
     b.setPosition(fromEnemy.x, fromEnemy.y + 10);
-    gameScene.physics.moveToObject(b, player, ENEMY_BULLET_SPEED);
+    const speed = difficulty ? difficulty.enemyBulletSpeed : ENEMY_BULLET_SPEED;
+    gameScene.physics.moveToObject(b, player, speed);
+}
+
+function bossShoot() {
+    if (isPaused) return;
+    if (!boss || !boss.active) return;
+    if (!player || !player.active) return;
+    const b = enemyBullets.get(boss.x, boss.y + 30);
+    if (!b) return;
+    b.setActive(true).setVisible(true);
+    b.body.enable = true;
+    b.setPosition(boss.x, boss.y + 30);
+    const speed = difficulty ? difficulty.bossBulletSpeed : (ENEMY_BULLET_SPEED + 40);
+    gameScene.physics.moveToObject(b, player, speed);
 }
 
 function updateScoreText() {
     scoreText.setText('Score: ' + score);
-    if (score < BOSS_SCORE) {
+    if (!bossSpawned && score < BOSS_SCORE_TARGET) {
         const phase = Math.floor(score / POINTS_PER_PHASE) + 1;
         if (phase !== currentPhase) {
             currentPhase = phase;
