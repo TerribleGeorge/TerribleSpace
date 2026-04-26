@@ -120,7 +120,27 @@ function preload() {
     
     graphics.clear();
     graphics.fillStyle(0xff6600);
-    graphics.fillRect(0, 0, 160, 160);
+    // Boss "ship" shape (still uses Arcade rectangular hitbox)
+    graphics.beginPath();
+    // nose
+    graphics.moveTo(80, 0);
+    graphics.lineTo(110, 35);
+    // right wing
+    graphics.lineTo(150, 55);
+    graphics.lineTo(120, 85);
+    // tail
+    graphics.lineTo(120, 140);
+    graphics.lineTo(80, 160);
+    graphics.lineTo(40, 140);
+    // left wing
+    graphics.lineTo(40, 85);
+    graphics.lineTo(10, 55);
+    graphics.lineTo(50, 35);
+    graphics.closePath();
+    graphics.fillPath();
+    // cockpit
+    graphics.fillStyle(0x222222);
+    graphics.fillEllipse(80, 70, 36, 22);
     graphics.generateTexture('bossBig', 160, 160);
 
     graphics.clear();
@@ -415,8 +435,8 @@ function spawnBoss() {
     
     boss.setScale(1.5);
     
-    boss.body.setSize(160, 160);
-    boss.body.setOffset(-80, -80);
+    // Keep the hitbox centered; negative offsets break overlaps.
+    boss.body.setSize(120, 120, true);
     
     bossHealthText.setText('BOSS: ' + boss.health + '/' + BOSS_MAX_HEALTH);
     bossHealthText.setVisible(true);
