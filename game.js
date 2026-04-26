@@ -70,8 +70,9 @@ let hpText;
 const PLAYER_SPEED = 300;
 const POINTS_PER_PHASE = 500;
 const BOSS_SCORE = 3000;
-const BOSS_MAX_HEALTH = 1000;
+const BOSS_MAX_HEALTH = 1000000;
 const BOSS_DAMAGE = 50;
+const BOSS_HIT_SCORE = 5;
 const BASE_FIRE_COOLDOWN_MS = 200;
 const RAPID_FIRE_COOLDOWN_MS = 90;
 const RAPID_FIRE_DURATION_MS = 8000;
@@ -534,6 +535,8 @@ function hitBoss(bullet, bossSprite) {
     bullet.disableBody(true, true);
     if (!bossSprite || !bossSprite.active) return;
     bossSprite.health -= BOSS_DAMAGE;
+    score += BOSS_HIT_SCORE;
+    updateScoreText();
     bossHealthText.setText('BOSS: ' + bossSprite.health + '/' + BOSS_MAX_HEALTH);
     flashSprite(bossSprite);
     
